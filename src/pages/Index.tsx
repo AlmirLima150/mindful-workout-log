@@ -1,9 +1,10 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Plus, Timer, TrendingUp, Activity } from "lucide-react";
+import { Calendar, Plus, Timer, TrendingUp, Activity, LogOut, User } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import WorkoutTimer from "@/components/WorkoutTimer";
 import CreateWorkout from "@/components/CreateWorkout";
 import ExerciseLibrary from "@/components/ExerciseLibrary";
@@ -12,6 +13,24 @@ import ProgressTracker from "@/components/ProgressTracker";
 const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showTimer, setShowTimer] = useState(false);
+  const { user, signOut } = useAuth();
+  const { toast } = useToast();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast({
+        title: 'Logout realizado',
+        description: 'Até a próxima!',
+      });
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao fazer logout',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const recentWorkouts = [
     { id: 1, name: "Peito e Tríceps", date: "2024-06-18", duration: "45 min", exercises: 6 },
@@ -142,10 +161,17 @@ const Index = () => {
           <div className="flex justify-between items-center h-16">
             <h1 className="text-2xl font-bold text-gray-900">FitTracker</h1>
             <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <User className="w-4 h-4 text-gray-600" />
+                <span className="text-sm text-gray-600">{user?.email}</span>
+              </div>
               <Badge variant="outline" className="text-green-600 border-green-200">
                 <Calendar className="w-3 h-3 mr-1" />
                 {new Date().toLocaleDateString('pt-BR')}
               </Badge>
+              <Button variant="ghost" size="sm" onClick={handleSignOut}>
+                <LogOut className="w-4 h-4" />
+              </Button>
             </div>
           </div>
         </div>
