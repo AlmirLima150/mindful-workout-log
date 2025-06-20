@@ -1,10 +1,12 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Plus, Timer, TrendingUp, Activity, LogOut, User } from "lucide-react";
+import { Calendar, Plus, Timer, TrendingUp, Activity, LogOut, User, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useWorkouts } from "@/hooks/useWorkouts";
 import WorkoutTimer from "@/components/WorkoutTimer";
 import CreateWorkout from "@/components/CreateWorkout";
 import ExerciseLibrary from "@/components/ExerciseLibrary";
@@ -15,6 +17,7 @@ const Index = () => {
   const [showTimer, setShowTimer] = useState(false);
   const { user, signOut } = useAuth();
   const { toast } = useToast();
+  const { data: workouts = [], isLoading: workoutsLoading } = useWorkouts();
 
   const handleSignOut = async () => {
     try {
@@ -32,18 +35,49 @@ const Index = () => {
     }
   };
 
-  const recentWorkouts = [
-    { id: 1, name: "Peito e Tríceps", date: "2024-06-18", duration: "45 min", exercises: 6 },
-    { id: 2, name: "Costas e Bíceps", date: "2024-06-16", duration: "52 min", exercises: 8 },
-    { id: 3, name: "Pernas", date: "2024-06-14", duration: "38 min", exercises: 5 },
-  ];
-
+  // Calculate stats from real data
   const stats = {
-    totalWorkouts: 24,
-    thisWeek: 4,
-    avgDuration: "42 min",
-    streak: 7
+    totalWorkouts: workouts.length,
+    thisWeek: workouts.filter(w => {
+      const workoutDate = new Date(w.date);
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return workoutDate >= weekAgo;
+    }).length,
+    avgDuration: workouts.length > 0 
+      ? Math.round(workouts.reduce((acc, w) => acc + (w.duration_minutes || 0), 0) / workouts.length) + ' min'
+      : '0 min',
+    streak: calculateStreak(workouts)
   };
+
+  function calculateStreak(workouts: any[]) {
+    if (workouts.length === 0) return 0;
+    
+    const sortedWorkouts = [...workouts].sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+    
+    let streak = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    for (const workout of sortedWorkouts) {
+      const workoutDate = new Date(workout.date);
+      workoutDate.setHours(0, 0, 0, 0);
+      
+      const daysDiff = Math.floor((today.getTime() - workoutDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysDiff <= streak + 1) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
+  }
+
+  const recentWorkouts = workouts.slice(0, 3);
 
   const renderContent = () => {
     switch(activeTab) {
@@ -115,25 +149,39 @@ const Index = () => {
                 <CardDescription>Seus últimos treinos realizados</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {recentWorkouts.map((workout) => (
-                    <div key={workout.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                          <Activity className="w-5 h-5 text-blue-600" />
+                {workoutsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  </div>
+                ) : recentWorkouts.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>Nenhum treino registrado ainda</p>
+                    <p className="text-sm">Crie seu primeiro treino para começar!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {recentWorkouts.map((workout) => (
+                      <div key={workout.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                            <Activity className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{workout.name}</p>
+                            <p className="text-sm text-gray-600">
+                              {new Date(workout.date).toLocaleDateString('pt-BR')}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">{workout.name}</p>
-                          <p className="text-sm text-gray-600">{workout.date}</p>
+                        <div className="text-right">
+                          {workout.duration_minutes && (
+                            <Badge variant="secondary">{workout.duration_minutes} min</Badge>
+                          )}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <Badge variant="secondary">{workout.duration}</Badge>
-                        <p className="text-sm text-gray-600 mt-1">{workout.exercises} exercícios</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

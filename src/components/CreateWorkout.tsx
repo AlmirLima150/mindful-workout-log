@@ -4,10 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Loader2 } from 'lucide-react';
+import { useExercises } from '@/hooks/useExercises';
+import { useCreateWorkout, WorkoutSet } from '@/hooks/useWorkouts';
 
-interface Exercise {
+interface ExerciseInWorkout {
   id: string;
+  exercise_id: string;
   name: string;
   sets: number;
   reps: string;
@@ -17,18 +20,16 @@ interface Exercise {
 
 const CreateWorkout = () => {
   const [workoutName, setWorkoutName] = useState('');
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [exercises, setExercises] = useState<ExerciseInWorkout[]>([]);
   const [showAddExercise, setShowAddExercise] = useState(false);
 
-  const popularExercises = [
-    'Supino Reto', 'Agachamento', 'Levantamento Terra', 'Rosca Direta',
-    'Desenvolvimento', 'Puxada Alta', 'Leg Press', 'Remada Curvada',
-    'Flexão', 'Tríceps Testa', 'Elevação Lateral', 'Cadeira Extensora'
-  ];
+  const { data: availableExercises = [], isLoading: exercisesLoading } = useExercises();
+  const createWorkout = useCreateWorkout();
 
-  const addExercise = (exerciseName: string) => {
-    const newExercise: Exercise = {
+  const addExercise = (exerciseId: string, exerciseName: string) => {
+    const newExercise: ExerciseInWorkout = {
       id: Date.now().toString(),
+      exercise_id: exerciseId,
       name: exerciseName,
       sets: 3,
       reps: '8-12',
@@ -43,21 +44,41 @@ const CreateWorkout = () => {
     setExercises(exercises.filter(ex => ex.id !== id));
   };
 
-  const updateExercise = (id: string, field: keyof Exercise, value: any) => {
+  const updateExercise = (id: string, field: keyof ExerciseInWorkout, value: any) => {
     setExercises(exercises.map(ex => 
       ex.id === id ? { ...ex, [field]: value } : ex
     ));
   };
 
-  const saveWorkout = () => {
+  const saveWorkout = async () => {
     if (!workoutName.trim() || exercises.length === 0) {
       alert('Por favor, adicione um nome e pelo menos um exercício');
       return;
     }
     
-    // Here you would save to localStorage or database
-    console.log('Saving workout:', { name: workoutName, exercises });
-    alert('Treino salvo com sucesso!');
+    // Convert exercises to sets format
+    const sets: Omit<WorkoutSet, 'id'>[] = [];
+    exercises.forEach((exercise, exerciseIndex) => {
+      const numSets = exercise.sets;
+      const repsRange = exercise.reps;
+      const weight = parseFloat(exercise.weight) || undefined;
+      
+      for (let setIndex = 0; setIndex < numSets; setIndex++) {
+        sets.push({
+          exercise_id: exercise.exercise_id,
+          set_order: setIndex + 1,
+          reps: parseInt(repsRange.split('-')[0]) || 8, // Use first number of range
+          weight_kg: weight,
+          rest_seconds: exercise.rest,
+        });
+      }
+    });
+
+    await createWorkout.mutateAsync({
+      name: workoutName,
+      date: new Date().toISOString().split('T')[0],
+      sets: sets,
+    });
     
     // Reset form
     setWorkoutName('');
@@ -87,13 +108,13 @@ const CreateWorkout = () => {
             <Button 
               onClick={() => setShowAddExercise(true)}
               className="bg-blue-600 hover:bg-blue-700"
+              disabled={exercisesLoading}
             >
               <Plus className="w-4 h-4 mr-2" />
               Adicionar Exercício
             </Button>
           </div>
 
-          {/* Exercise List */}
           {exercises.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <p>Nenhum exercício adicionado ainda</p>
@@ -101,7 +122,7 @@ const CreateWorkout = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {exercises.map((exercise, index) => (
+              {exercises.map((exercise) => (
                 <Card key={exercise.id} className="border-l-4 border-l-blue-500">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3">
@@ -162,8 +183,19 @@ const CreateWorkout = () => {
 
           {exercises.length > 0 && (
             <div className="flex gap-3 pt-4">
-              <Button onClick={saveWorkout} className="bg-green-600 hover:bg-green-700">
-                Salvar Treino
+              <Button 
+                onClick={saveWorkout} 
+                disabled={createWorkout.isPending}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {createWorkout.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  'Salvar Treino'
+                )}
               </Button>
               <Button 
                 variant="outline" 
@@ -171,6 +203,7 @@ const CreateWorkout = () => {
                   setWorkoutName('');
                   setExercises([]);
                 }}
+                disabled={createWorkout.isPending}
               >
                 Limpar Tudo
               </Button>
@@ -191,32 +224,29 @@ const CreateWorkout = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <p className="text-sm text-gray-600">Exercícios populares:</p>
-                <div className="flex flex-wrap gap-2">
-                  {popularExercises.map((exercise) => (
-                    <Badge
-                      key={exercise}
-                      variant="outline"
-                      className="cursor-pointer hover:bg-blue-50 hover:border-blue-300"
-                      onClick={() => addExercise(exercise)}
-                    >
-                      {exercise}
-                    </Badge>
-                  ))}
-                </div>
-                
-                <div className="pt-4">
-                  <Input
-                    placeholder="Ou digite o nome do exercício..."
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                        addExercise(e.currentTarget.value.trim());
-                        e.currentTarget.value = '';
-                      }
-                    }}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Pressione Enter para adicionar</p>
-                </div>
+                {exercisesLoading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-600">Seus exercícios:</p>
+                    <div className="space-y-2">
+                      {availableExercises.map((exercise) => (
+                        <div
+                          key={exercise.id}
+                          className="flex items-center justify-between p-2 border rounded cursor-pointer hover:bg-gray-50"
+                          onClick={() => addExercise(exercise.id, exercise.name)}
+                        >
+                          <span className="font-medium">{exercise.name}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {exercise.muscle_group}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
